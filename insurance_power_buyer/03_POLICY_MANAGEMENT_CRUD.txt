@@ -1,0 +1,549 @@
+================================================================================
+POLICY MANAGEMENT MODULE - CRUD OPERATIONS LOGIC
+================================================================================
+
+MODULE: Policy Management
+PURPOSE: Manage insurance policies, renewals, and policy lifecycle
+ENTITIES: Policies, Policy Types, Coverage, Riders, Nominees
+
+================================================================================
+1. CREATE OPERATION - Issue New Policy
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Pre-Issuance Validation
+   - Verify customer exists and is active
+   - Verify customer KYC is completed
+   - Validate customer age for policy type
+   - Check customer eligibility criteria
+   - Verify no duplicate active policy (for same coverage)
+   - Validate sum assured limits
+   - Check underwriting requirements
+
+2. Policy Number Generation
+   - Format: POL-[PolicyType]-[YYYY]-[Sequential-6-digits]
+   - Example: POL-LIFE-2025-000001
+   - Ensure uniqueness
+   - Generate across all branches
+
+3. Premium Calculation
+   - Base premium calculation based on:
+     * Age of insured
+     * Sum assured amount
+     * Policy term
+     * Policy type (Term, Whole Life, Endowment, etc.)
+     * Payment frequency (Annual, Semi-annual, Quarterly, Monthly)
+   - Add riders premium if selected
+   - Apply GST/taxes as per regulations
+   - Apply discounts (loyalty, bulk, promotional)
+   - Calculate total premium
+
+4. Risk Assessment
+   - Evaluate risk factors:
+     * Age and health condition
+     * Occupation type
+     * Lifestyle habits (smoking, drinking)
+     * Pre-existing medical conditions
+     * Family medical history
+   - Assign risk category (Low, Medium, High)
+   - Determine if medical examination required
+   - Set loading percentage based on risk
+
+5. Underwriting Process
+   - If sum assured > threshold: Require medical examination
+   - If age > threshold: Require detailed health questionnaire
+   - High-risk occupation: Additional premium loading
+   - Pre-existing conditions: Special terms and conditions
+   - Underwriter approval workflow for high-value policies
+
+6. Nominee Details Processing
+   - Validate nominee information
+   - Check relationship with policyholder
+   - Verify nominee age (appoint appointee if minor)
+   - Support multiple nominees with share percentage
+   - Validate total share = 100%
+
+7. Riders/Add-ons Processing
+   - Validate rider eligibility
+   - Calculate rider premium
+   - Check rider sum assured limits
+   - Attach riders to base policy
+
+8. Payment Processing
+   - Generate payment schedule
+   - Process first premium payment
+   - Support multiple payment methods:
+     * Cash
+     * Cheque
+     * Credit/Debit Card
+     * Net Banking
+     * UPI
+     * Auto-debit (ECS/NACH)
+   - Generate payment receipt
+
+9. Document Generation
+   - Generate policy document (PDF)
+   - Generate payment receipt
+   - Generate policy schedule
+   - Generate benefit illustration
+   - Generate welcome letter
+   - Digital signature on documents
+
+10. Database Transaction
+    - Begin transaction
+    - Insert into policies table
+    - Insert into policy_coverage table
+    - Insert into policy_riders table (if any)
+    - Insert into policy_nominees table
+    - Insert into policy_payments table
+    - Insert into policy_documents table
+    - Commit transaction
+
+11. Post-Issuance Activities
+    - Send policy documents via email
+    - Send SMS confirmation
+    - Update customer's active policy count
+    - Assign to servicing agent
+    - Schedule first renewal reminder
+    - Update business analytics
+    - Log audit trail
+
+VALIDATION RULES:
+----------------
+- Customer ID: Required, must exist and be active
+- Policy Type: Required, must be valid type
+- Sum Assured: Required, min and max limits based on policy type
+- Policy Term: Required, min and max based on policy type
+- Premium Payment Term: Required, cannot exceed policy term
+- Age: Must be within policy type age limits
+- Nominee: At least one nominee required
+- Payment: First premium must be paid
+- Medical Exam: Required if sum assured > 2,500,000
+- Smoke Status: Required for health/life policies
+
+ERROR HANDLING:
+--------------
+- Customer not found: Return error "Invalid customer ID"
+- KYC incomplete: Return error "Complete KYC before policy purchase"
+- Age not eligible: Return error "Age not eligible for this policy type"
+- Sum assured limit exceeded: Return error with limits
+- Payment failure: Rollback policy creation
+- Document generation failure: Retry mechanism
+- Database error: Rollback transaction and log
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "policy_id": "POL-LIFE-2025-000001",
+  "policy_number": "POL-LIFE-2025-000001",
+  "customer_id": "CUST-20250115-0001",
+  "sum_assured": 1000000.00,
+  "annual_premium": 15000.00,
+  "policy_start_date": "2025-01-15",
+  "policy_end_date": "2045-01-14",
+  "payment_due_date": "2025-02-14",
+  "status": "Active",
+  "documents": ["policy_document.pdf", "receipt.pdf"]
+}
+
+================================================================================
+2. READ OPERATION - Retrieve Policy Information
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Single Policy Retrieval
+   - Search by policy_id/policy_number (primary)
+   - Search by customer_id (all policies of customer)
+   - Apply access control:
+     * Customers: Only their own policies
+     * Agents: Only their assigned policies
+     * Managers: All policies in their branch
+     * Admin: All policies
+
+2. Policy Details Include
+   - Basic policy information
+   - Coverage details
+   - Rider information
+   - Nominee details (masked for non-authorized users)
+   - Premium details and payment schedule
+   - Payment history
+   - Claim history (if any)
+   - Policy status and flags
+   - Agent/branch information
+   - Maturity/surrender values
+
+3. Multiple Policies Retrieval (List/Search)
+   - Pagination support
+   - Sorting: date, premium, status, customer
+   - Filters:
+     * Policy type
+     * Status (Active, Lapsed, Matured, Surrendered)
+     * Date range (issue date, maturity date)
+     * Premium range
+     * Sum assured range
+     * Agent/Branch
+     * Payment status
+   - Search: policy number, customer name, customer ID
+
+4. Policy Calculations
+   - Current surrender value
+   - Current maturity value
+   - Bonus accumulated (if applicable)
+   - Paid-up value
+   - Outstanding premium amount
+   - Grace period days remaining
+   - Policy year and age of insured
+
+5. Status Information
+   - Policy status (Active, Lapsed, Paid-up, Matured, Surrendered)
+   - Premium payment status
+   - Grace period indicator
+   - Revival eligibility
+   - Loan eligibility
+   - Surrender eligibility
+
+QUERY OPTIMIZATION:
+------------------
+- Index on policy_number, customer_id, status
+- Use joins efficiently for related data
+- Implement caching for frequently accessed policies
+- Use database views for complex calculations
+- Pagination for large result sets
+
+RESPONSE FORMAT:
+---------------
+Single Policy: {
+  "policy_id": "POL-LIFE-2025-000001",
+  "policy_number": "POL-LIFE-2025-000001",
+  "customer": {
+    "customer_id": "CUST-20250115-0001",
+    "name": "John Doe",
+    "age": 34
+  },
+  "policy_type": "Term Life Insurance",
+  "sum_assured": 1000000.00,
+  "policy_term": 20,
+  "premium_payment_term": 15,
+  "annual_premium": 15000.00,
+  "payment_frequency": "Annual",
+  "policy_start_date": "2025-01-15",
+  "policy_end_date": "2045-01-14",
+  "maturity_date": "2045-01-14",
+  "status": "Active",
+  "current_year": 1,
+  "nominees": [...],
+  "riders": [...],
+  "payment_history": [...],
+  "surrender_value": 0.00,
+  "maturity_value": 1000000.00
+}
+
+================================================================================
+3. UPDATE OPERATION - Modify Policy Details
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Allowed Update Types
+
+   A. Administrative Updates (No Underwriting)
+      - Contact information update
+      - Agent assignment change
+      - Branch transfer
+      - Payment method change
+      - Auto-debit setup/cancellation
+      - Communication preferences
+
+   B. Nominee Updates
+      - Add new nominee
+      - Remove nominee (if multiple exist)
+      - Change nominee details
+      - Change share percentage
+      - Update appointee (for minor nominee)
+      - Require customer signature/verification
+
+   C. Coverage Modifications (Require Underwriting)
+      - Increase sum assured (medical exam may be required)
+      - Add riders (premium recalculation)
+      - Remove riders (refund calculation)
+      - Change policy term (subject to policy rules)
+      - Not allowed for term insurance
+
+   D. Premium Payment Updates
+      - Change payment frequency
+      - Update bank account for auto-debit
+      - Change payment mode
+      - Premium recalculation if frequency changed
+
+   E. Status Updates
+      - Activate (from lapsed - revival process)
+      - Lapse (after grace period)
+      - Surrender (calculate surrender value)
+      - Paid-up (convert to paid-up policy)
+      - Reinstate (from paid-up)
+
+2. Update Validation
+   - Verify policy exists and is updatable
+   - Check user authorization
+   - Validate update type is allowed for policy status
+   - Check policy rules for modification allowed
+   - Verify no pending claims
+   - Check grace period for certain updates
+
+3. Premium Recalculation (when applicable)
+   - Calculate new premium based on current age
+   - Adjust for sum assured changes
+   - Adjust for rider addition/removal
+   - Calculate pro-rata premium
+   - Generate revised payment schedule
+
+4. Approval Workflow
+   - Minor updates: Auto-approved
+   - Nominee changes: Customer verification required
+   - Coverage changes: Underwriter approval required
+   - Surrender: Manager approval required
+   - High-value changes: Senior management approval
+
+5. Document Updates
+   - Generate endorsement document
+   - Update policy document
+   - Generate revised schedule
+   - Maintain version history
+   - Get customer acknowledgment
+
+6. Database Transaction
+   - Begin transaction
+   - Insert into policy_updates_audit table
+   - Update policies table
+   - Update related tables (nominees, riders, etc.)
+   - Insert endorsement record
+   - Commit transaction
+
+7. Post-Update Activities
+   - Send update confirmation email/SMS
+   - Send revised policy documents
+   - Update premium payment schedule
+   - Notify agent of changes
+   - Update analytics
+   - Log audit trail
+
+BUSINESS RULES:
+--------------
+- Sum assured cannot be decreased (only increased)
+- Policy term cannot be reduced
+- Nominee changes require customer signature
+- Coverage increase may require medical examination
+- Cannot update lapsed policy without revival
+- Surrendered/matured policies cannot be updated
+- Premium payment term cannot exceed policy term
+
+ERROR HANDLING:
+--------------
+- Policy not found: Return 404 error
+- Policy status not updatable: Return error with status
+- Unauthorized update: Return 403 error
+- Validation failure: Return specific errors
+- Pending claims exist: Block coverage updates
+- Premium calculation error: Rollback and log
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "policy_id": "POL-LIFE-2025-000001",
+  "message": "Policy updated successfully",
+  "updates": {
+    "nominee_added": "Jane Doe",
+    "share_percentage": 100
+  },
+  "endorsement_number": "END-2025-0001",
+  "updated_at": "2025-01-15T10:30:00Z",
+  "requires_signature": true
+}
+
+================================================================================
+4. DELETE OPERATION - Cancel/Surrender Policy
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Policy Cancellation (Free Look Period)
+   - Allowed within free look period (15-30 days)
+   - Full premium refund (minus stamp duty)
+   - No surrender value calculation
+   - Require cancellation reason
+   - Customer signature required
+
+2. Policy Surrender (After Free Look)
+   - Allowed only if policy has surrender value
+   - Surrender value calculation based on:
+     * Number of premiums paid
+     * Policy year
+     * Surrender value factor
+     * Bonus accumulated (if any)
+   - Deduct outstanding loans
+   - Deduct unpaid premiums
+   - Manager approval required
+
+3. Pre-Cancellation Validations
+   - Verify policy exists and is active
+   - Check if in free look period
+   - Verify no pending claims
+   - Check for outstanding loans
+   - Verify user has authorization
+   - Require customer confirmation
+
+4. Surrender Value Calculation
+   - Guaranteed Surrender Value:
+     * (Total premiums paid × Surrender value factor) - Outstanding loans
+   - Special Surrender Value:
+     * (Sum assured × Surrender value percentage) + Bonus - Outstanding loans
+   - Surrender value = Maximum of above two
+   - Minimum holding period: 3 years for traditional policies
+
+5. Soft Delete Approach
+   - Set policy status = 'Surrendered'
+   - Set is_active = False
+   - Retain all historical data
+   - Allow data access for reports
+   - Maintain audit trail
+
+6. Payment Processing
+   - Calculate final surrender value
+   - Deduct applicable charges
+   - Process refund payment
+   - Generate surrender discharge form
+   - Update payment records
+
+7. Document Generation
+   - Generate surrender discharge voucher
+   - Generate surrender value statement
+   - Generate tax certificate (if applicable)
+   - Require customer signature
+   - Archive all policy documents
+
+8. Database Transaction
+   - Begin transaction
+   - Update policy status to 'Surrendered'
+   - Insert into policy_surrender table
+   - Update policy_payments table
+   - Insert surrender payment record
+   - Insert into audit table
+   - Commit transaction
+
+9. Post-Surrender Activities
+   - Send surrender confirmation
+   - Send surrender discharge voucher
+   - Process refund payment
+   - Update customer's active policy count
+   - Update business analytics
+   - Close auto-debit mandates
+   - Log audit trail
+
+BUSINESS RULES:
+--------------
+- Free look cancellation: 15-30 days from policy receipt
+- Surrender allowed only after minimum 3 years (for traditional)
+- Term insurance has zero surrender value
+- ULIPs: Minimum 5 years lock-in period
+- Cannot surrender with pending claims
+- Outstanding loans deducted from surrender value
+- Tax implications as per regulations
+
+VALIDATION CHECKS:
+-----------------
+- Policy exists and is active
+- User authorization verified
+- No pending claims
+- Minimum surrender period completed (if not free look)
+- Customer confirmation obtained
+- Manager approval obtained
+- Outstanding loan amount verified
+
+SURRENDER VALUE CALCULATION EXAMPLE:
+----------------------------------
+Policy Details:
+- Sum Assured: 1,000,000
+- Annual Premium: 50,000
+- Premiums Paid: 5 years (250,000 total)
+- Surrender Value Factor: 30%
+- Outstanding Loan: 20,000
+
+Calculation:
+- Guaranteed Surrender Value = (250,000 × 0.30) - 20,000 = 55,000
+- Net Surrender Value = 55,000
+
+ERROR HANDLING:
+--------------
+- Policy not found: Return 404 error
+- Not eligible for surrender: Return error with reason
+- Within lock-in period: Return error with lock-in end date
+- Pending claims: Block surrender
+- Outstanding dues > surrender value: Return error
+
+RESPONSE:
+--------
+Success (Free Look): {
+  "status": "success",
+  "policy_id": "POL-LIFE-2025-000001",
+  "cancellation_type": "Free Look",
+  "refund_amount": 14900.00,
+  "deductions": {
+    "stamp_duty": 100.00
+  },
+  "refund_method": "Bank Transfer",
+  "processing_days": 15,
+  "cancelled_at": "2025-01-30T10:30:00Z"
+}
+
+Success (Surrender): {
+  "status": "success",
+  "policy_id": "POL-LIFE-2025-000001",
+  "surrender_type": "Regular Surrender",
+  "surrender_value": 55000.00,
+  "premiums_paid": 250000.00,
+  "outstanding_loan": 20000.00,
+  "net_surrender_value": 55000.00,
+  "payment_method": "NEFT",
+  "processing_days": 30,
+  "surrendered_at": "2025-01-15T10:30:00Z"
+}
+
+================================================================================
+ADDITIONAL OPERATIONS
+================================================================================
+
+5. POLICY REVIVAL
+   - Check revival eligibility
+   - Calculate revival premium
+   - Process revival payment
+   - Restore policy to active status
+
+6. POLICY LOAN
+   - Calculate loan eligibility
+   - Process loan against policy
+   - Set interest rate
+   - Update policy loan balance
+
+7. POLICY RENEWAL
+   - Generate renewal notice
+   - Calculate renewal premium
+   - Process renewal payment
+   - Extend policy term
+
+8. MATURITY PROCESSING
+   - Calculate maturity benefits
+   - Process maturity payment
+   - Generate maturity documents
+   - Close policy
+
+9. POLICY ASSIGNMENT
+   - Transfer policy ownership
+   - Update nominee details
+   - Legal documentation
+   - Stamp duty payment
+
+================================================================================

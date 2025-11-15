@@ -1,0 +1,515 @@
+================================================================================
+AGENT/BROKER MANAGEMENT MODULE - CRUD OPERATIONS LOGIC
+================================================================================
+
+MODULE: Agent/Broker Management
+PURPOSE: Manage insurance agents, their performance, and commission
+ENTITIES: Agents, Agent Hierarchy, Targets, Commissions, Performance
+
+================================================================================
+1. CREATE OPERATION - Add New Agent
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Agent Registration Validation
+   - Validate all mandatory fields
+   - Check email uniqueness
+   - Validate license number
+   - Verify license validity
+   - Check minimum qualification
+   - Validate age (minimum 18 years)
+   - Verify IRDA certification (if applicable)
+
+2. Agent ID Generation
+   - Format: AGT-[BranchCode]-[YYYY]-[Sequential-4-digits]
+   - Example: AGT-MUM-2025-0001
+   - Ensure uniqueness
+   - Include branch/region code
+
+3. Agent Types
+   - Individual Agent
+   - Corporate Agent
+   - Broker
+   - Bancassurance Partner
+   - Point of Sales Person (POSP)
+   - Insurance Marketing Firm (IMF)
+
+4. License Verification
+   - Verify IRDA license number
+   - Check license validity period
+   - Verify license type matches agent type
+   - Check for license suspension/cancellation
+   - Store license copy
+
+5. Hierarchy Assignment
+   - Assign to branch
+   - Assign reporting manager
+   - Set commission structure level
+   - Define territory/zone
+   - Set hierarchical position
+
+6. Commission Structure Setup
+   - First year commission percentage
+   - Renewal commission percentage
+   - Override commission rules
+   - Performance incentive slabs
+   - Bonus structure
+   - Commission payment frequency
+
+7. Target Assignment
+   - Monthly sales target
+   - Quarterly targets
+   - Annual targets
+   - Product-wise targets
+   - Premium collection targets
+
+8. Access Rights Setup
+   - Create user login
+   - Assign role (Agent, Team Leader, Manager)
+   - Set module permissions
+   - Define data access level
+   - Generate temporary password
+
+9. Bank Details for Commission
+   - Bank name and branch
+   - Account number
+   - IFSC code
+   - Account holder name
+   - PAN number (mandatory)
+   - Cancelled cheque copy
+
+10. Database Transaction
+    - Begin transaction
+    - Insert into agents table
+    - Insert into agent_hierarchy table
+    - Insert into agent_commission_structure table
+    - Insert into agent_targets table
+    - Create user account
+    - Commit transaction
+
+11. Post-Registration Activities
+    - Send welcome email with credentials
+    - Send agent kit/ID card request
+    - Schedule orientation/training
+    - Assign mentor (if applicable)
+    - Add to communication groups
+    - Log audit trail
+
+VALIDATION RULES:
+----------------
+- Full Name: Required, 2-100 characters
+- Email: Required, valid format, unique
+- Phone: Required, 10-15 digits, unique
+- Date of Birth: Required, age >= 18
+- License Number: Required, valid, not expired
+- PAN Number: Required, valid format
+- Qualification: Minimum as per regulations
+- Branch: Required
+- Commission Structure: Required
+- Bank Account: Required for payment
+
+ERROR HANDLING:
+--------------
+- Duplicate email: Return error "Email already registered"
+- Duplicate license: Return error "License already in use"
+- Invalid license: Return error "Invalid or expired license"
+- Missing PAN: Return error "PAN is mandatory for commission payment"
+- Invalid branch: Return error "Branch not found"
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "agent_id": "AGT-MUM-2025-0001",
+  "agent_code": "AGT-MUM-2025-0001",
+  "name": "Rajesh Kumar",
+  "email": "rajesh.kumar@example.com",
+  "license_number": "12345678",
+  "branch": "Mumbai Central",
+  "status": "Active",
+  "login_created": true,
+  "temporary_password": "sent_via_email",
+  "created_at": "2025-01-15T10:30:00Z"
+}
+
+================================================================================
+2. READ OPERATION - Retrieve Agent Information
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Single Agent Retrieval
+   - Search by agent_id (primary)
+   - Search by agent_code
+   - Search by email
+   - Search by license number
+   - Apply access control
+
+2. Agent Details Include
+   - Personal information
+   - License details
+   - Branch/territory assignment
+   - Commission structure
+   - Current targets
+   - Performance metrics
+   - Team members (if manager)
+   - Customer portfolio
+   - Policy count (active/lapsed)
+   - Commission earned
+
+3. Multiple Agents Retrieval (List/Search)
+   - Pagination support
+   - Sorting: name, code, performance, date
+   - Filters:
+     * Agent type
+     * Status (Active, Inactive, Suspended)
+     * Branch/Region
+     * License status
+     * Performance level
+     * Reporting manager
+     * Joining date range
+   - Search: name, code, email, license, phone
+
+4. Performance Metrics
+   - Policies sold (monthly, quarterly, annual)
+   - Premium collected
+   - Target achievement percentage
+   - Persistency ratio
+   - Customer retention rate
+   - New business vs renewals
+   - Average policy size
+   - Commission earned
+
+5. Team Hierarchy View
+   - Show team structure
+   - Direct reports
+   - Indirect reports
+   - Team performance
+   - Team targets vs achievement
+
+6. Commission Summary
+   - Commission earned (MTD, QTD, YTD)
+   - Commission paid
+   - Commission pending
+   - Commission breakup
+   - TDS deducted
+
+QUERY OPTIMIZATION:
+------------------
+- Index on agent_id, agent_code, email
+- Composite index on (branch, status, created_date)
+- Index on license_number
+- Materialized views for performance metrics
+
+RESPONSE FORMAT:
+---------------
+Single Agent: {
+  "agent_id": "AGT-MUM-2025-0001",
+  "agent_code": "AGT-MUM-2025-0001",
+  "name": "Rajesh Kumar",
+  "email": "rajesh.kumar@example.com",
+  "phone": "9876543210",
+  "license_number": "12345678",
+  "license_valid_till": "2026-12-31",
+  "agent_type": "Individual Agent",
+  "status": "Active",
+  "branch": "Mumbai Central",
+  "reporting_manager": "AGT-MUM-2024-0015",
+  "joining_date": "2025-01-15",
+  "commission_structure": "Structure A",
+  "performance": {
+    "monthly_target": 500000.00,
+    "monthly_achievement": 350000.00,
+    "achievement_percentage": 70.00,
+    "policies_sold_mtd": 15,
+    "commission_earned_mtd": 35000.00
+  },
+  "customer_count": 120,
+  "active_policies": 105,
+  "lapsed_policies": 15
+}
+
+Agent List: {
+  "total_records": 250,
+  "page": 1,
+  "per_page": 20,
+  "total_pages": 13,
+  "agents": [...]
+}
+
+================================================================================
+3. UPDATE OPERATION - Modify Agent Details
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Allowed Update Types
+
+   A. Personal Information Updates
+      - Name, contact details
+      - Address
+      - Email (requires verification)
+      - Phone number
+
+   B. Professional Information Updates
+      - License renewal
+      - Qualification updates
+      - Specialization/certifications
+      - Profile photo
+
+   C. Assignment Updates
+      - Branch transfer
+      - Territory change
+      - Reporting manager change
+      - Team assignment
+
+   D. Commission Structure Updates
+      - Update commission percentage
+      - Change commission structure
+      - Add special incentives
+      - Modify payment frequency
+      - Require management approval
+
+   E. Target Updates
+      - Modify monthly targets
+      - Adjust quarterly targets
+      - Special targets for campaigns
+      - Product-specific targets
+
+   F. Status Updates
+      - Activate/Deactivate
+      - Suspend (with reason)
+      - Terminate (with process)
+      - Temporary leave
+
+   G. Bank Details Updates
+      - Update bank account
+      - Change PAN details
+      - Require document verification
+
+2. License Renewal Process
+   - Upload new license document
+   - Update validity dates
+   - Verify authenticity
+   - Update status to active
+   - Send renewal confirmation
+
+3. Branch Transfer Process
+   - Approve transfer request
+   - Update branch assignment
+   - Transfer customer portfolio (optional)
+   - Update reporting hierarchy
+   - Notify stakeholders
+
+4. Commission Structure Change
+   - Management approval required
+   - Effective date specification
+   - Impact calculation
+   - Update commission rules
+   - Notify agent
+
+5. Suspension/Termination
+   - Require detailed reason
+   - Management approval
+   - Customer portfolio reassignment
+   - Disable system access
+   - Commission settlement process
+   - Exit formalities
+   - Maintain historical data
+
+6. Database Transaction
+   - Begin transaction
+   - Insert into agent_updates_audit table
+   - Update agents table
+   - Update related tables
+   - Insert notification records
+   - Commit transaction
+
+7. Post-Update Activities
+   - Send update confirmation
+   - Update access rights if needed
+   - Notify reporting manager
+   - Update organizational chart
+   - Log audit trail
+
+BUSINESS RULES:
+--------------
+- Agent ID/Code cannot be changed
+- License expiry: 30 days notice
+- Commission structure change: 15 days notice
+- Branch transfer: Proper handover required
+- Suspension: Maximum 90 days
+- Termination: Follow regulatory guidelines
+- Bank details change: Verification mandatory
+
+ERROR HANDLING:
+--------------
+- Agent not found: Return 404 error
+- Unauthorized update: Return 403 error
+- Validation failure: Return specific errors
+- License expired: Block policy issuance
+- Duplicate email/phone: Return conflict error
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "agent_id": "AGT-MUM-2025-0001",
+  "message": "Agent details updated successfully",
+  "updated_fields": ["branch", "reporting_manager"],
+  "effective_date": "2025-02-01",
+  "updated_at": "2025-01-15T10:30:00Z"
+}
+
+================================================================================
+4. DELETE OPERATION - Deactivate/Terminate Agent
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Soft Delete (Recommended)
+   - Set status = 'Inactive'/'Terminated'
+   - Set is_active = False
+   - Retain all historical data
+   - Disable system access
+   - Maintain commission records
+
+2. Termination Process
+   - Verify termination reason
+   - Management approval
+   - Notice period compliance
+   - Customer portfolio handover
+   - Pending commission settlement
+   - System access revocation
+   - Exit interview
+
+3. Pre-Termination Validations
+   - Check active policies under agent
+   - Verify pending commissions
+   - Check ongoing transactions
+   - Verify customer handover completion
+   - Ensure no pending dues
+
+4. Customer Portfolio Handover
+   - Identify all active customers
+   - Assign to new agent
+   - Notify customers of change
+   - Transfer servicing rights
+   - Update commission structure
+
+5. Commission Settlement
+   - Calculate pending commissions
+   - Process final commission payment
+   - Deduct any dues/advances
+   - Generate settlement statement
+   - TDS calculation
+   - Payment processing
+
+6. Database Transaction
+   - Begin transaction
+   - Update agent status
+   - Reassign customer portfolio
+   - Update commission records
+   - Disable user account
+   - Insert termination record
+   - Commit transaction
+
+7. Post-Termination Activities
+   - Send termination confirmation
+   - Process final settlement
+   - Revoke ID card/access
+   - Update organizational chart
+   - Archive agent records
+   - Log audit trail
+
+BUSINESS RULES:
+--------------
+- Cannot delete agent with active servicing policies
+- Must complete customer handover
+- Commission settlement mandatory
+- Notice period as per contract
+- Data retention: Minimum 7 years
+- Historical data must be preserved
+
+VALIDATION CHECKS:
+-----------------
+- Agent exists
+- User has termination authority
+- Customer handover complete
+- Commission settled
+- No pending transactions
+- Termination reason provided
+- Management approval obtained
+
+ERROR HANDLING:
+--------------
+- Agent not found: Return 404 error
+- Active policies exist: Return error with count
+- Pending commissions: Return settlement details
+- Insufficient permissions: Return 403 error
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "agent_id": "AGT-MUM-2025-0001",
+  "message": "Agent deactivated successfully",
+  "termination_type": "Voluntary Resignation",
+  "effective_date": "2025-01-31",
+  "customers_transferred": 120,
+  "new_servicing_agent": "AGT-MUM-2024-0050",
+  "pending_commission": 25000.00,
+  "settlement_date": "2025-02-15",
+  "terminated_at": "2025-01-15T10:30:00Z"
+}
+
+================================================================================
+ADDITIONAL OPERATIONS
+================================================================================
+
+5. PERFORMANCE TRACKING
+   - Daily activity logging
+   - Sales funnel tracking
+   - Lead conversion rate
+   - Customer acquisition cost
+   - Retention metrics
+
+6. COMMISSION CALCULATION
+   - Auto-calculate commission
+   - Apply commission rules
+   - TDS calculation
+   - Commission payment processing
+   - Commission statement generation
+
+7. TARGET MANAGEMENT
+   - Set individual/team targets
+   - Monitor target achievement
+   - Progress tracking
+   - Performance rankings
+   - Incentive calculations
+
+8. TRAINING & CERTIFICATION
+   - Track training completion
+   - Certification management
+   - Product knowledge tests
+   - Compliance training
+   - CPD (Continuing Professional Development)
+
+9. AGENT PORTAL
+   - Dashboard with KPIs
+   - Customer portfolio view
+   - Policy status tracking
+   - Commission statements
+   - Lead management
+   - Document repository
+
+10. AGENT ANALYTICS
+    - Top performers
+    - Product-wise performance
+    - Territory analysis
+    - Trend analysis
+    - Persistency tracking
+    - Lapse rate analysis
+
+================================================================================

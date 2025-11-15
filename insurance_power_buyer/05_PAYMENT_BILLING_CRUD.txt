@@ -1,0 +1,521 @@
+================================================================================
+PAYMENT & BILLING MODULE - CRUD OPERATIONS LOGIC
+================================================================================
+
+MODULE: Payment & Billing Management
+PURPOSE: Process premium payments, manage billing, and handle financial transactions
+ENTITIES: Payments, Payment Schedules, Receipts, Refunds, Late Fees
+
+================================================================================
+1. CREATE OPERATION - Process New Payment
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Payment Initiation Validation
+   - Verify policy exists and requires payment
+   - Check payment due amount
+   - Validate payment amount (not less than due)
+   - Check grace period status
+   - Verify payment method is valid
+   - Validate payer information
+
+2. Payment Types
+   - Premium Payment (Regular)
+   - Revival Premium Payment
+   - Policy Loan Repayment
+   - Rider Premium Payment
+   - Late Fee Payment
+   - Reinstatement Payment
+   - Additional Premium (for sum assured increase)
+
+3. Payment Reference Generation
+   - Format: PAY-[YYYY]-[MM]-[Sequential-8-digits]
+   - Example: PAY-2025-01-00000001
+   - Unique transaction ID
+   - Include timestamp
+
+4. Payment Amount Calculation
+   - Base premium amount
+   + GST/Service tax
+   + Late fee (if applicable)
+   + Outstanding dues
+   - Discount (if any)
+   = Total payment amount
+
+5. Payment Method Processing
+
+   A. Cash Payment
+      - Accept at branch only
+      - Generate instant receipt
+      - Daily limit checks
+      - Cash register entry
+      - Denomination details
+
+   B. Cheque Payment
+      - Validate cheque details
+      - Cheque number, date, bank
+      - Image capture of cheque
+      - Cheque realization tracking
+      - Return cheque handling
+
+   C. Credit/Debit Card
+      - Integration with payment gateway
+      - Card validation
+      - CVV verification
+      - 3D secure authentication
+      - Transaction encryption
+      - Instant confirmation
+
+   D. Net Banking
+      - Bank integration
+      - Secure redirection
+      - Transaction verification
+      - Callback handling
+      - Reconciliation
+
+   E. UPI Payment
+      - UPI ID validation
+      - QR code generation
+      - Payment request
+      - Real-time status
+      - Auto-reconciliation
+
+   F. Auto-Debit (ECS/NACH)
+      - Bank mandate verification
+      - Scheduled debit
+      - Success/failure handling
+      - Retry mechanism
+      - Customer notification
+
+6. Payment Gateway Integration
+   - Initiate payment request
+   - Send encrypted data
+   - Receive payment response
+   - Verify digital signature
+   - Handle callbacks
+   - Update payment status
+
+7. Grace Period Management
+   - Grace period: 30 days from due date
+   - Accept payment during grace period
+   - No late fee during grace period
+   - After grace period: Policy lapses
+   - Notify customer before lapse
+
+8. Late Fee Calculation
+   - If payment after grace period (revival case)
+   - Late fee = (Premium × Late fee rate × Months delayed)
+   - Add to total payment amount
+   - Minimum and maximum late fee limits
+
+9. Receipt Generation
+   - Generate unique receipt number
+   - Format: RCP-[YYYY]-[Sequential-8-digits]
+   - Include all payment details
+   - Tax invoice (if applicable)
+   - Digital signature
+   - PDF generation
+   - Email/SMS delivery
+
+10. Database Transaction
+    - Begin transaction
+    - Insert into payments table
+    - Update policy_payments table
+    - Update payment_schedule table
+    - Insert into receipts table
+    - Update policy status (if revival/lapse prevention)
+    - Commit transaction
+
+11. Post-Payment Activities
+    - Send payment confirmation SMS/Email
+    - Send receipt via email
+    - Update policy status (Active if was lapsed)
+    - Schedule next payment reminder
+    - Update customer account balance
+    - Update agent commission
+    - Log audit trail
+
+VALIDATION RULES:
+----------------
+- Policy Number: Required, must be valid
+- Payment Amount: Required, >= due amount
+- Payment Method: Required
+- Payment Date: Required, cannot be future date
+- Payer Name: Required
+- Bank Details: Required for cheque/online payments
+- Card Details: Required for card payments (encrypted)
+- UPI ID: Required for UPI payments
+- Receipt Email: Required
+
+ERROR HANDLING:
+--------------
+- Policy not found: Return error "Invalid policy number"
+- Payment amount insufficient: Return error with due amount
+- Payment gateway failure: Retry mechanism, notify user
+- Card declined: Return error with reason
+- Insufficient funds: Return error, suggest alternate method
+- Duplicate transaction: Check and prevent double payment
+- Network timeout: Queue for retry, notify user
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "payment_id": "PAY-2025-01-00000001",
+  "transaction_id": "TXN-20250115-123456",
+  "policy_number": "POL-LIFE-2025-000001",
+  "payment_method": "UPI",
+  "amount_paid": 15000.00,
+  "payment_date": "2025-01-15T10:30:00Z",
+  "receipt_number": "RCP-2025-00000001",
+  "next_due_date": "2026-01-15",
+  "next_due_amount": 15000.00,
+  "policy_status": "Active",
+  "receipt_url": "https://example.com/receipts/RCP-2025-00000001.pdf"
+}
+
+================================================================================
+2. READ OPERATION - Retrieve Payment Information
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Single Payment Retrieval
+   - Search by payment_id (primary)
+   - Search by transaction_id
+   - Search by receipt_number
+   - Search by policy_number + date
+   - Apply access control
+
+2. Payment Details Include
+   - Payment information
+   - Policy details
+   - Payment method details
+   - Receipt information
+   - Transaction status
+   - Gateway response
+   - Reconciliation status
+
+3. Multiple Payments Retrieval (List/Search)
+   - Pagination support
+   - Sorting: date, amount, status
+   - Filters:
+     * Payment method
+     * Status (Success, Failed, Pending, Refunded)
+     * Date range
+     * Amount range
+     * Policy number
+     * Customer
+     * Branch
+   - Search: receipt number, transaction ID, policy number
+
+4. Payment Schedule Retrieval
+   - Get payment schedule for policy
+   - Show paid vs pending installments
+   - Next due date and amount
+   - Overdue payments
+   - Grace period status
+
+5. Payment History
+   - All payments for a policy
+   - Payment trend analysis
+   - Payment regularity score
+   - Default history
+
+6. Payment Reconciliation Status
+   - Bank reconciliation status
+   - Gateway settlement status
+   - Accounting entry status
+   - Discrepancy flags
+
+QUERY OPTIMIZATION:
+------------------
+- Index on payment_id, transaction_id, policy_number
+- Composite index on (policy_number, payment_date)
+- Index on payment_date for date range queries
+- Materialized view for payment summaries
+
+RESPONSE FORMAT:
+---------------
+Single Payment: {
+  "payment_id": "PAY-2025-01-00000001",
+  "transaction_id": "TXN-20250115-123456",
+  "policy_number": "POL-LIFE-2025-000001",
+  "customer_name": "John Doe",
+  "payment_type": "Premium Payment",
+  "payment_method": "UPI",
+  "payment_date": "2025-01-15T10:30:00Z",
+  "amount": 15000.00,
+  "breakdown": {
+    "premium": 13500.00,
+    "gst": 1500.00,
+    "late_fee": 0.00
+  },
+  "status": "Success",
+  "receipt_number": "RCP-2025-00000001",
+  "payment_for_period": "2025-01-15 to 2026-01-14",
+  "next_due_date": "2026-01-15"
+}
+
+Payment Schedule: {
+  "policy_number": "POL-LIFE-2025-000001",
+  "payment_frequency": "Annual",
+  "total_installments": 15,
+  "paid_installments": 5,
+  "pending_installments": 10,
+  "schedule": [
+    {
+      "installment_number": 1,
+      "due_date": "2025-01-15",
+      "amount": 15000.00,
+      "status": "Paid",
+      "paid_date": "2025-01-15",
+      "receipt_number": "RCP-2025-00000001"
+    },
+    {
+      "installment_number": 2,
+      "due_date": "2026-01-15",
+      "amount": 15000.00,
+      "status": "Upcoming",
+      "days_to_due": 365
+    }
+  ]
+}
+
+================================================================================
+3. UPDATE OPERATION - Modify Payment Details
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Allowed Update Types
+
+   A. Payment Status Updates
+      - Pending → Success (after gateway confirmation)
+      - Pending → Failed (on gateway failure)
+      - Success → Refunded (on refund processing)
+      - Failed → Retry (manual retry)
+
+   B. Reconciliation Updates
+      - Mark as reconciled
+      - Update reconciliation date
+      - Update accounting entry reference
+      - Update bank statement reference
+
+   C. Payment Method Updates
+      - Update for pending payments only
+      - Cannot change for successful payments
+      - Require customer authorization
+
+   D. Cheque Status Updates
+      - Deposited
+      - Cleared
+      - Bounced
+      - Cancelled
+
+   E. Auto-Debit Updates
+      - Enable/disable auto-debit
+      - Update bank account
+      - Update debit date
+      - Retry failed auto-debit
+
+2. Cheque Return Handling
+   - Mark payment as failed
+   - Charge return fee
+   - Update policy status (may lapse)
+   - Notify customer
+   - Request alternate payment
+
+3. Payment Reversal/Refund
+   - Validate refund eligibility
+   - Calculate refund amount
+   - Process refund transaction
+   - Update payment status
+   - Generate refund receipt
+
+4. Payment Reallocation
+   - Allocate to different policy
+   - Allocate to different period
+   - Allocate to loan repayment
+   - Require manager approval
+
+5. Database Transaction
+   - Begin transaction
+   - Insert into payment_updates_audit table
+   - Update payments table
+   - Update policy_payments table
+   - Update payment_schedule table
+   - Insert notification records
+   - Commit transaction
+
+6. Post-Update Activities
+   - Send status update notification
+   - Update policy status if needed
+   - Update accounting entries
+   - Update reconciliation records
+   - Log audit trail
+
+BUSINESS RULES:
+--------------
+- Cannot modify successful payment amount
+- Refund only to original payment source
+- Cheque bounce fee as per policy
+- Auto-debit retry: Maximum 3 attempts
+- Payment reallocation requires customer consent
+- Status updates must follow workflow
+
+ERROR HANDLING:
+--------------
+- Payment not found: Return 404 error
+- Unauthorized update: Return 403 error
+- Invalid status transition: Return error
+- Refund processing failure: Retry mechanism
+- Already reconciled: Cannot modify
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "payment_id": "PAY-2025-01-00000001",
+  "message": "Payment status updated successfully",
+  "previous_status": "Pending",
+  "current_status": "Success",
+  "updated_at": "2025-01-15T10:35:00Z"
+}
+
+================================================================================
+4. DELETE OPERATION - Cancel/Reverse Payment
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Payment Cancellation Scenarios
+   - Cancel pending payment
+   - Reverse failed transaction
+   - Process refund for successful payment
+   - Cancel duplicate payment
+
+2. Refund Processing
+   - Validate refund eligibility:
+     * Policy cancelled/surrendered
+     * Overpayment
+     * Duplicate payment
+     * Wrong policy number
+     * Free look cancellation
+
+   - Refund amount calculation:
+     * For full cancellation: Full premium - charges
+     * For partial: Pro-rata calculation
+     * Deduct processing fee (if applicable)
+     * Tax treatment as per regulations
+
+3. Pre-Cancellation Validations
+   - Verify payment exists
+   - Check payment status
+   - Verify refund eligibility
+   - Check user authorization
+   - Require cancellation reason
+   - Manager approval for amounts > threshold
+
+4. Refund Methods
+   - Same method as original payment (preferred)
+   - Bank transfer (NEFT/RTGS)
+   - Cheque
+   - Cash (for small amounts only)
+   - Adjust against future premium
+
+5. Database Transaction
+   - Begin transaction
+   - Update payment status to 'Refunded'
+   - Insert into refunds table
+   - Update policy_payments table
+   - Update policy status if needed
+   - Insert audit record
+   - Commit transaction
+
+6. Post-Cancellation Activities
+   - Process refund payment
+   - Generate refund receipt
+   - Send refund confirmation
+   - Update accounting entries
+   - Update policy status
+   - Log audit trail
+
+BUSINESS RULES:
+--------------
+- Refund within 30 days: Full refund
+- Refund after 30 days: May have processing fee
+- Cannot cancel reconciled payments without special approval
+- Refund timeline: 15-30 business days
+- Minimum refund amount: As per policy
+- Tax refund as per regulations
+
+VALIDATION CHECKS:
+-----------------
+- Payment exists and is refundable
+- User authorization verified
+- Refund reason provided
+- Manager approval (if required)
+- Original payment source active
+
+ERROR HANDLING:
+--------------
+- Payment not found: Return 404 error
+- Not eligible for refund: Return error with reason
+- Already refunded: Return error
+- Refund processing failure: Retry mechanism
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "payment_id": "PAY-2025-01-00000001",
+  "refund_id": "REF-2025-01-00000001",
+  "refund_amount": 14900.00,
+  "processing_fee": 100.00,
+  "refund_method": "NEFT",
+  "estimated_days": 7,
+  "refund_status": "Initiated",
+  "refunded_at": "2025-01-20T10:30:00Z"
+}
+
+================================================================================
+ADDITIONAL OPERATIONS
+================================================================================
+
+5. PAYMENT REMINDER
+   - Generate payment reminder
+   - Send before due date (7, 3, 1 days)
+   - Multiple channels (Email, SMS, WhatsApp)
+   - Personalized message
+   - Payment link included
+
+6. PAYMENT RECONCILIATION
+   - Bank statement reconciliation
+   - Payment gateway reconciliation
+   - Accounting entry matching
+   - Identify discrepancies
+   - Auto-reconciliation rules
+
+7. COMMISSION CALCULATION
+   - Calculate agent commission
+   - First year commission
+   - Renewal commission
+   - Override commission
+   - Commission payment processing
+
+8. PAYMENT ANALYTICS
+   - Collection efficiency
+   - Payment mode analysis
+   - Default rate
+   - Grace period utilization
+   - Auto-debit success rate
+
+9. BULK PAYMENT PROCESSING
+   - Bulk premium upload
+   - Corporate payment processing
+   - Salary deduction processing
+   - Bulk reconciliation
+
+================================================================================
