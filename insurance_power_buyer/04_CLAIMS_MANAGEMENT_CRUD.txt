@@ -1,0 +1,557 @@
+================================================================================
+CLAIMS MANAGEMENT MODULE - CRUD OPERATIONS LOGIC
+================================================================================
+
+MODULE: Claims Management
+PURPOSE: Process insurance claims efficiently and accurately
+ENTITIES: Claims, Claim Documents, Claim Approvals, Claim Payments
+
+================================================================================
+1. CREATE OPERATION - Register New Claim
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Claim Registration Validation
+   - Verify policy exists and is active
+   - Verify policy is in force (not lapsed)
+   - Check claim intimation timeline compliance
+   - Verify no duplicate claim for same incident
+   - Validate claimant authorization
+   - Check policy coverage for claim type
+
+2. Claim Number Generation
+   - Format: CLM-[PolicyType]-[YYYY]-[Sequential-6-digits]
+   - Example: CLM-LIFE-2025-000001
+   - Ensure uniqueness across all claims
+   - Generate timestamp-based reference
+
+3. Claim Type Identification
+   - Death Claim (Life Insurance)
+   - Maturity Claim
+   - Critical Illness Claim
+   - Disability Claim
+   - Accidental Death Claim
+   - Hospital Cash Claim
+   - Rider Claim
+   - Surrender Claim
+
+4. Policy Validation
+   - Verify policy status = Active
+   - Check premium payment status (no outstanding dues)
+   - Verify policy term coverage
+   - Check waiting period compliance
+   - Validate exclusions don't apply
+   - Verify sum assured available
+
+5. Document Requirements Checklist
+   - Death Claims:
+     * Death certificate (original/certified copy)
+     * Claim form (duly filled)
+     * Policy document
+     * Nominee ID proof
+     * Nominee bank details
+     * Medical records
+     * Police FIR (if unnatural death)
+     * Post-mortem report (if required)
+
+   - Maturity Claims:
+     * Claim form
+     * Policy document
+     * Discharge form
+     * ID proof
+     * Bank details
+
+   - Health/Critical Illness:
+     * Claim form
+     * Medical reports
+     * Hospital bills
+     * Doctor's certificate
+     * Diagnostic reports
+     * Prescription and bills
+
+6. Claim Amount Calculation
+   - For Death Claims:
+     * Sum assured
+     + Bonus (if applicable)
+     + Rider benefits
+     - Outstanding loans
+     - Unpaid premiums
+
+   - For Maturity Claims:
+     * Maturity sum assured
+     + Guaranteed additions
+     + Bonus
+     - Outstanding loans
+
+   - For Health Claims:
+     * Actual medical expenses
+     OR Sum assured (whichever is lower)
+     - Deductibles
+     - Co-payment
+
+7. Fraud Detection Checks
+   - Check against fraud database
+   - Validate death certificate authenticity
+   - Cross-verify medical records
+   - Check for policy purchased recently
+   - Validate beneficiary relationships
+   - Flag suspicious claims for investigation
+
+8. Initial Assessment
+   - Assign claim examiner
+   - Set priority (High/Medium/Low)
+   - Estimate processing timeline
+   - Identify if investigation required
+   - Set claim status to 'Registered'
+
+9. Database Transaction
+   - Begin transaction
+   - Insert into claims table
+   - Insert into claim_documents table
+   - Insert into claim_checklist table
+   - Insert into claim_timeline table
+   - Update policy table (claim_pending flag)
+   - Commit transaction
+
+10. Post-Registration Activities
+    - Send claim registration confirmation
+    - Send claim number to claimant
+    - Send document checklist if incomplete
+    - Assign to claim examiner
+    - Schedule investigation (if required)
+    - Log audit trail
+    - Update dashboards
+
+VALIDATION RULES:
+----------------
+- Policy Number: Required, must be valid and active
+- Claim Type: Required
+- Date of Event: Required, must be within policy term
+- Intimation Date: Required, within allowed timeline
+- Claimant Details: Required, must match nominee
+- Claim Amount: Required, within sum assured
+- Death Certificate: Required for death claims (within 90 days)
+- Medical Reports: Required for health claims
+- Bank Details: Required for payment processing
+
+ERROR HANDLING:
+--------------
+- Policy not found: Return error "Invalid policy number"
+- Policy lapsed: Return error "Policy is lapsed, please revive first"
+- Claim intimation delayed: Flag for special consideration
+- Duplicate claim: Return error "Claim already exists for this event"
+- Missing documents: Return error with checklist
+- Exclusion applies: Return error with exclusion details
+- Waiting period: Return error with waiting period details
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "claim_id": "CLM-LIFE-2025-000001",
+  "claim_number": "CLM-LIFE-2025-000001",
+  "policy_number": "POL-LIFE-2025-000001",
+  "claim_type": "Death Claim",
+  "claim_amount": 1000000.00,
+  "registration_date": "2025-01-15",
+  "status": "Registered",
+  "assigned_to": "Examiner John",
+  "expected_settlement_days": 30,
+  "pending_documents": ["Death Certificate", "Police FIR"],
+  "next_steps": ["Submit pending documents within 7 days"]
+}
+
+================================================================================
+2. READ OPERATION - Retrieve Claim Information
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Single Claim Retrieval
+   - Search by claim_id/claim_number (primary)
+   - Search by policy_number
+   - Search by customer_id
+   - Apply access control:
+     * Customers: Only their claims
+     * Agents: Claims of their policies
+     * Claim Examiners: Assigned claims
+     * Managers: All claims in department
+     * Admin: All claims
+
+2. Claim Details Include
+   - Basic claim information
+   - Policy details
+   - Claimant/Beneficiary information
+   - Claim amount breakdown
+   - Document checklist and status
+   - Approval workflow status
+   - Payment status
+   - Investigation details (if any)
+   - Communication history
+   - Timeline of events
+
+3. Multiple Claims Retrieval (List/Search)
+   - Pagination support
+   - Sorting: date, amount, status, priority
+   - Filters:
+     * Claim type
+     * Status (Registered, Under Review, Approved, Rejected, Paid)
+     * Date range (registration, settlement)
+     * Amount range
+     * Policy type
+     * Assigned examiner
+     * Priority level
+     * Investigation status
+   - Search: claim number, policy number, customer name
+
+4. Claim Status Tracking
+   - Status timeline with timestamps
+   - Current stage in workflow
+   - Pending actions
+   - Responsible person
+   - Expected completion date
+   - Days pending
+
+5. Document Status
+   - List of required documents
+   - Submitted documents
+   - Pending documents
+   - Verified documents
+   - Additional documents requested
+
+6. Payment Tracking
+   - Approved amount
+   - Payment method
+   - Payment date
+   - Transaction reference
+   - Payment status
+   - Beneficiary details
+
+QUERY OPTIMIZATION:
+------------------
+- Index on claim_number, policy_number, status
+- Composite index on (status, created_date)
+- Use joins for related tables
+- Implement caching for active claims
+- Materialized views for statistics
+
+RESPONSE FORMAT:
+---------------
+Single Claim: {
+  "claim_id": "CLM-LIFE-2025-000001",
+  "claim_number": "CLM-LIFE-2025-000001",
+  "policy": {
+    "policy_number": "POL-LIFE-2025-000001",
+    "customer_name": "John Doe",
+    "sum_assured": 1000000.00
+  },
+  "claim_type": "Death Claim",
+  "date_of_event": "2025-01-10",
+  "intimation_date": "2025-01-12",
+  "registration_date": "2025-01-15",
+  "claim_amount": 1000000.00,
+  "approved_amount": 0.00,
+  "status": "Under Review",
+  "priority": "High",
+  "assigned_to": "Examiner John",
+  "beneficiary": {
+    "name": "Jane Doe",
+    "relationship": "Spouse",
+    "contact": "98XXXXXX45"
+  },
+  "documents": {
+    "submitted": 5,
+    "pending": 2,
+    "verified": 3
+  },
+  "timeline": [
+    {
+      "stage": "Registered",
+      "date": "2025-01-15",
+      "by": "System"
+    },
+    {
+      "stage": "Under Review",
+      "date": "2025-01-16",
+      "by": "Examiner John"
+    }
+  ]
+}
+
+================================================================================
+3. UPDATE OPERATION - Modify Claim Details
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Allowed Update Types
+
+   A. Document Updates
+      - Upload additional documents
+      - Mark document as verified
+      - Request more documents
+      - Update document status
+
+   B. Status Updates
+      - Move to next stage in workflow
+      - Under Review → Investigation
+      - Investigation → Approved/Rejected
+      - Approved → Payment Processing
+      - Payment Processing → Paid
+      - Any stage → Rejected (with reason)
+
+   C. Claim Amount Updates
+      - Adjust claim amount based on investigation
+      - Add/remove components
+      - Apply deductions
+      - Update approved amount
+      - Require manager approval for changes
+
+   D. Assignment Updates
+      - Assign/reassign examiner
+      - Assign investigator
+      - Escalate to manager
+      - Transfer to specialist team
+
+   E. Investigation Updates
+      - Add investigation notes
+      - Upload investigation report
+      - Update investigation status
+      - Add findings and recommendations
+
+2. Workflow State Machine
+   - Registered → Documents Verification
+   - Documents Verification → Under Review
+   - Under Review → Investigation (if required)
+   - Under Review/Investigation → Approved/Rejected
+   - Approved → Payment Processing
+   - Payment Processing → Paid
+   - Any stage → Additional Information Required
+   - Additional Information Required → Previous stage
+
+3. Approval Workflow
+   - Claim amount < 100,000: Examiner approval
+   - Claim amount 100,000-500,000: Manager approval
+   - Claim amount > 500,000: Senior management approval
+   - Death claims: Always manager approval
+   - Rejected claims: Manager approval required
+   - Investigation reports: Senior examiner review
+
+4. Document Verification
+   - Check document completeness
+   - Verify document authenticity
+   - Cross-check information
+   - Validate signatures
+   - Update verification status
+
+5. Investigation Initiation
+   - Trigger conditions:
+     * Death within 2 years of policy
+     * High claim amount
+     * Suspicious circumstances
+     * Fraud indicators
+     * Unnatural death
+   - Assign investigator
+   - Set investigation timeline
+   - Update claim status
+
+6. Approval/Rejection Logic
+   - Approval:
+     * All documents verified
+     * No exclusions apply
+     * Investigation cleared (if done)
+     * Manager approval obtained
+     * Calculate final approved amount
+
+   - Rejection:
+     * Exclusion applies
+     * Fraud detected
+     * Incomplete information
+     * Policy terms violation
+     * Document forgery
+     * Mandatory reason required
+
+7. Database Transaction
+   - Begin transaction
+   - Insert into claim_updates_audit table
+   - Update claims table
+   - Update claim_workflow table
+   - Insert notification records
+   - Commit transaction
+
+8. Post-Update Activities
+   - Send status update notification
+   - Email/SMS to claimant
+   - Update dashboards
+   - Trigger next workflow step
+   - Log audit trail
+   - Update SLA metrics
+
+BUSINESS RULES:
+--------------
+- Cannot skip workflow stages
+- Rejection requires detailed reason
+- Approved amount cannot exceed sum assured
+- Investigation mandatory for death within 2 years
+- Manager approval for amounts > threshold
+- Status can only move forward (except for info requests)
+- All documents must be verified before approval
+
+ERROR HANDLING:
+--------------
+- Claim not found: Return 404 error
+- Unauthorized update: Return 403 error
+- Invalid status transition: Return error with valid options
+- Missing approvals: Return error requesting approval
+- Document verification pending: Block approval
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "claim_id": "CLM-LIFE-2025-000001",
+  "message": "Claim status updated successfully",
+  "previous_status": "Under Review",
+  "current_status": "Approved",
+  "approved_amount": 1000000.00,
+  "approved_by": "Manager Smith",
+  "approved_at": "2025-01-20T10:30:00Z",
+  "next_step": "Payment Processing",
+  "estimated_payment_date": "2025-01-25"
+}
+
+================================================================================
+4. DELETE OPERATION - Cancel/Withdraw Claim
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Claim Withdrawal (by Claimant)
+   - Allowed before approval
+   - Require written request
+   - Customer authorization required
+   - Manager approval needed
+   - Set status to 'Withdrawn'
+   - Maintain claim history
+
+2. Claim Cancellation (by Company)
+   - For duplicate claims
+   - For fraudulent claims
+   - For rejected claims (archived)
+   - Require detailed reason
+   - Senior management approval
+   - Legal clearance if needed
+
+3. Pre-Deletion Validations
+   - Verify claim exists
+   - Check current status
+   - Verify no payment processed
+   - Check user authorization
+   - Require cancellation reason
+   - Obtain necessary approvals
+
+4. Soft Delete Approach (Recommended)
+   - Set status = 'Withdrawn'/'Cancelled'
+   - Set is_active = False
+   - Retain all data for audit
+   - Maintain document history
+   - Keep in reporting
+
+5. Payment Reversal (if applicable)
+   - If payment in progress: Stop payment
+   - If payment done: Initiate recovery
+   - Update financial records
+   - Generate reversal documents
+
+6. Database Transaction
+   - Begin transaction
+   - Update claims status
+   - Insert into claim_cancellation table
+   - Update policy table (remove claim_pending flag)
+   - Insert audit record
+   - Commit transaction
+
+7. Post-Cancellation Activities
+   - Send cancellation confirmation
+   - Notify all stakeholders
+   - Update policy status
+   - Release policy for transactions
+   - Update analytics
+   - Log audit trail
+
+BUSINESS RULES:
+--------------
+- Withdrawal allowed only before payment
+- Cancellation requires senior approval
+- Fraud claims: Legal action initiated
+- Rejected claims: Auto-archived after 90 days
+- Cannot delete if payment processed
+- Must maintain 7-year record
+
+VALIDATION CHECKS:
+-----------------
+- Claim exists and is cancellable
+- No payment processed
+- User authorization verified
+- Cancellation reason provided
+- Required approvals obtained
+- Customer confirmation (for withdrawal)
+
+ERROR HANDLING:
+--------------
+- Claim not found: Return 404 error
+- Payment already processed: Cannot cancel
+- Insufficient permissions: Return 403 error
+- Missing approvals: Return error
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "claim_id": "CLM-LIFE-2025-000001",
+  "action": "Withdrawn",
+  "reason": "Claimant request - already settled by employer",
+  "cancelled_by": "Manager Smith",
+  "cancelled_at": "2025-01-18T10:30:00Z",
+  "policy_released": true
+}
+
+================================================================================
+ADDITIONAL OPERATIONS
+================================================================================
+
+5. CLAIM INVESTIGATION
+   - Initiate investigation
+   - Assign investigator
+   - Track investigation progress
+   - Upload investigation reports
+   - Investigation findings
+
+6. CLAIM SETTLEMENT
+   - Calculate final settlement amount
+   - Process payment
+   - Generate discharge voucher
+   - Update policy status
+   - Close claim
+
+7. CLAIM REPUDIATION
+   - Reject claim with detailed reasons
+   - Legal documentation
+   - Notification to claimant
+   - Update policy status
+
+8. CLAIM ANALYTICS
+   - Claim settlement ratio
+   - Average settlement time
+   - Claim amount trends
+   - Rejection reasons analysis
+   - Fraud detection metrics
+
+9. BULK OPERATIONS
+   - Bulk claim import
+   - Bulk status updates
+   - Bulk document verification
+   - Bulk payment processing
+
+================================================================================

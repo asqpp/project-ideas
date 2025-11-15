@@ -1,0 +1,382 @@
+================================================================================
+CUSTOMER/BUYER MANAGEMENT MODULE - CRUD OPERATIONS LOGIC
+================================================================================
+
+MODULE: Customer/Buyer Management
+PURPOSE: Manage insurance policy buyers and their information
+ENTITIES: Customers, Addresses, Contact Information, KYC Documents
+
+================================================================================
+1. CREATE OPERATION - Add New Customer
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Input Validation
+   - Validate all mandatory fields are provided
+   - Check email format and uniqueness
+   - Validate phone number format
+   - Verify age eligibility (minimum 18 years)
+   - Validate PAN/Tax ID format
+   - Check for duplicate records (by email, phone, PAN)
+
+2. Data Processing
+   - Generate unique customer ID (format: CUST-YYYYMMDD-XXXX)
+   - Encrypt sensitive information (PAN, Aadhaar, SSN)
+   - Hash password if creating login credentials
+   - Calculate age from date of birth
+   - Assign customer type (Individual/Corporate)
+   - Set default status as 'Active'
+   - Assign to agent/branch if applicable
+
+3. KYC Verification
+   - Mark KYC status as 'Pending'
+   - Store uploaded documents with version control
+   - Trigger KYC verification workflow
+   - Send verification email/SMS
+
+4. Database Transaction
+   - Begin transaction
+   - Insert into customers table
+   - Insert into customer_addresses table (if provided)
+   - Insert into customer_contacts table
+   - Insert into customer_kyc_documents table
+   - Commit transaction or rollback on error
+
+5. Post-Creation Activities
+   - Generate welcome email
+   - Create customer portal login (if opted)
+   - Assign loyalty points account
+   - Log audit trail
+   - Notify assigned agent
+
+VALIDATION RULES:
+----------------
+- First Name: Required, 2-50 characters, alphabets only
+- Last Name: Required, 2-50 characters, alphabets only
+- Email: Required, valid format, unique
+- Phone: Required, 10-15 digits, unique
+- Date of Birth: Required, age >= 18 years
+- PAN/Tax ID: Required for policies > threshold amount
+- Address: Required for policy issuance
+- KYC Documents: Required before policy purchase
+- Nominee Details: Optional during customer creation
+
+ERROR HANDLING:
+--------------
+- Duplicate email: Return error "Email already registered"
+- Duplicate phone: Return error "Phone number already exists"
+- Invalid age: Return error "Customer must be at least 18 years old"
+- Missing mandatory fields: Return specific field error
+- Document upload failure: Rollback transaction
+- Database error: Rollback and log error
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "customer_id": "CUST-20250115-0001",
+  "message": "Customer created successfully",
+  "kyc_status": "Pending",
+  "next_steps": ["Complete KYC verification", "Upload documents"]
+}
+
+================================================================================
+2. READ OPERATION - Retrieve Customer Information
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Single Customer Retrieval
+   - Search by customer_id (primary)
+   - Search by email
+   - Search by phone number
+   - Search by PAN/Tax ID
+   - Apply access control (agents can only see their customers)
+
+2. Multiple Customers Retrieval (List/Search)
+   - Pagination support (default 20 per page)
+   - Sorting options (name, date, status)
+   - Filter by:
+     * Customer type (Individual/Corporate)
+     * Status (Active/Inactive/Blocked)
+     * KYC status (Verified/Pending/Rejected)
+     * Date range (registration date)
+     * Agent/Branch
+     * City/State
+   - Search functionality (name, email, phone, customer_id)
+
+3. Data Masking
+   - Mask sensitive data based on user role
+   - Full access: Admin
+   - Partial access: Agents (only their customers)
+   - Limited access: Customer service (masked PAN, partial phone)
+   - Customer portal: Own data only
+
+4. Related Data Retrieval
+   - Load customer addresses
+   - Load contact persons
+   - Load KYC documents list
+   - Load active policies count
+   - Load claims history summary
+   - Calculate customer lifetime value
+
+QUERY OPTIMIZATION:
+------------------
+- Use indexed fields for search
+- Implement caching for frequently accessed records
+- Lazy loading for related entities
+- Select only required fields
+- Use database views for complex queries
+
+RESPONSE FORMAT:
+---------------
+Single Customer: {
+  "customer_id": "CUST-20250115-0001",
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "phone": "98XXXXXX45",
+  "dob": "1990-05-15",
+  "age": 34,
+  "customer_type": "Individual",
+  "kyc_status": "Verified",
+  "status": "Active",
+  "registration_date": "2025-01-15",
+  "active_policies": 2,
+  "total_premium": 50000.00,
+  "addresses": [...],
+  "documents": [...]
+}
+
+List Response: {
+  "total_records": 150,
+  "page": 1,
+  "per_page": 20,
+  "total_pages": 8,
+  "customers": [...]
+}
+
+================================================================================
+3. UPDATE OPERATION - Modify Customer Information
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Validation
+   - Verify customer exists
+   - Check user permission to update
+   - Validate fields being updated
+   - Verify no duplicate email/phone (if updating)
+   - Ensure critical fields are not changed without workflow
+
+2. Update Categories
+   A. Personal Information Updates
+      - Name, DOB (requires verification)
+      - Gender, Marital Status
+      - Occupation
+
+   B. Contact Information Updates
+      - Email (requires verification)
+      - Phone (requires OTP verification)
+      - Address (maintain address history)
+
+   C. Status Updates
+      - Activate/Deactivate customer
+      - Block/Unblock customer
+      - Update KYC status
+
+   D. Financial Information Updates
+      - Bank account details
+      - Payment preferences
+      - Billing address
+
+3. Version Control
+   - Maintain update history
+   - Track who made changes
+   - Store previous values
+   - Timestamp all changes
+
+4. Verification Requirements
+   - Email change: Send verification link to new email
+   - Phone change: Send OTP to new number
+   - Bank details: Require document proof
+   - Critical info: Require admin approval
+
+5. Database Transaction
+   - Begin transaction
+   - Insert into audit table (old values)
+   - Update customers table
+   - Update related tables if needed
+   - Commit transaction
+
+6. Post-Update Activities
+   - Send update confirmation email/SMS
+   - Notify assigned agent of changes
+   - Re-trigger KYC if critical fields changed
+   - Update cache
+   - Log audit trail
+
+BUSINESS RULES:
+--------------
+- Customer ID cannot be changed
+- PAN/Tax ID change requires document verification
+- Date of Birth change requires admin approval
+- Email change requires verification within 24 hours
+- Cannot deactivate customer with active policies
+- Status change to 'Blocked' requires reason and approval
+
+ERROR HANDLING:
+--------------
+- Customer not found: Return 404 error
+- Unauthorized update: Return 403 error
+- Validation failure: Return specific field errors
+- Active policies exist: Cannot deactivate/delete
+- Duplicate email/phone: Return conflict error
+
+RESPONSE:
+--------
+Success: {
+  "status": "success",
+  "customer_id": "CUST-20250115-0001",
+  "message": "Customer updated successfully",
+  "updated_fields": ["email", "address"],
+  "verification_required": ["email"],
+  "updated_at": "2025-01-15T10:30:00Z"
+}
+
+================================================================================
+4. DELETE OPERATION - Remove/Deactivate Customer
+================================================================================
+
+BUSINESS LOGIC:
+--------------
+1. Soft Delete Approach (Recommended)
+   - Set is_active = False
+   - Set status = 'Inactive'
+   - Retain all data for compliance
+   - Maintain audit trail
+   - Allow reactivation if needed
+
+2. Hard Delete (Restricted)
+   - Only allowed for test/duplicate records
+   - Requires admin approval
+   - Cascade delete related records
+   - Archive data before deletion
+   - Not allowed if any policies exist
+
+3. Pre-Delete Validations
+   - Check for active policies (block if exists)
+   - Check for pending claims (block if exists)
+   - Check for outstanding payments (block if exists)
+   - Verify user has delete permission
+   - Require confirmation and reason
+
+4. Data Archival
+   - Move data to archive tables
+   - Create backup of all related records
+   - Store deletion metadata
+   - Retention period: As per regulations
+
+5. Database Transaction
+   - Begin transaction
+   - Check all constraints
+   - Update is_active flag (soft delete)
+   - OR Delete from all related tables (hard delete)
+   - Insert into deletion_audit table
+   - Commit transaction
+
+6. Post-Delete Activities
+   - Anonymize personal data (GDPR compliance)
+   - Cancel portal access
+   - Notify assigned agent
+   - Update statistics/reports
+   - Log audit trail
+
+7. Reactivation Process
+   - Validate reactivation request
+   - Verify KYC documents are still valid
+   - Update status to 'Active'
+   - Restore portal access
+   - Send reactivation confirmation
+
+BUSINESS RULES:
+--------------
+- Cannot delete customer with active policies
+- Cannot delete customer with pending claims
+- Cannot delete customer with payment dues
+- Soft delete is default operation
+- Hard delete requires special permission
+- Data retention: Minimum 7 years (regulatory compliance)
+- Right to be forgotten: GDPR compliance procedure
+
+VALIDATION CHECKS:
+-----------------
+- Customer exists
+- User has delete permission
+- No active policies
+- No pending claims
+- No outstanding dues
+- Deletion reason provided
+- Admin approval obtained (for hard delete)
+
+ERROR HANDLING:
+--------------
+- Customer not found: Return 404 error
+- Active policies exist: Return error with policy details
+- Pending claims exist: Return error with claim details
+- Outstanding dues: Return error with amount details
+- Insufficient permissions: Return 403 error
+
+RESPONSE:
+--------
+Soft Delete Success: {
+  "status": "success",
+  "customer_id": "CUST-20250115-0001",
+  "message": "Customer deactivated successfully",
+  "deletion_type": "soft",
+  "deleted_at": "2025-01-15T10:30:00Z",
+  "can_reactivate": true
+}
+
+Hard Delete Success: {
+  "status": "success",
+  "customer_id": "CUST-20250115-0001",
+  "message": "Customer permanently deleted",
+  "deletion_type": "hard",
+  "archived": true,
+  "deleted_at": "2025-01-15T10:30:00Z"
+}
+
+Error Response: {
+  "status": "error",
+  "code": "DELETE_NOT_ALLOWED",
+  "message": "Cannot delete customer with active policies",
+  "active_policies": 2,
+  "details": ["Policy #POL-001", "Policy #POL-002"]
+}
+
+================================================================================
+ADDITIONAL OPERATIONS
+================================================================================
+
+5. SEARCH & FILTER
+   - Full-text search on name, email, phone
+   - Advanced filters: status, type, date range, agent
+   - Auto-complete for customer search
+   - Recent customers list
+   - Most valuable customers
+
+6. BULK OPERATIONS
+   - Bulk import from CSV/Excel
+   - Bulk update (status, agent assignment)
+   - Bulk export to various formats
+   - Bulk email/SMS communication
+
+7. CUSTOMER ANALYTICS
+   - Customer lifetime value
+   - Policy purchase patterns
+   - Renewal rates
+   - Claim frequency
+   - Customer segmentation
+
+================================================================================
